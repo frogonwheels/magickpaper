@@ -1,0 +1,167 @@
+#!/bin/bash
+# magickpaper - ImageMagick wrapper to generate lined paper/grids
+# Author: Michael Geddes, 2016
+# https://creativecommons.org/licenses/by/4.0/
+# Feel free to share and use this script, attribution would be appreciated.
+
+# Setup in mm
+# Default to A4 10mm grid
+width=210
+height=297
+lmarg=10
+rmarg=10
+tmarg=10
+bmarg=10
+
+xspace=10
+yspace=10
+
+has_vertical=1
+has_horizontal=1
+
+# Other setup
+colour=CornflowerBlue
+linewidth=2
+outfile=paper.pdf
+
+# Density in pix per cm
+density=120
+densityunits=pixelspercentimeter
+densityunitsperdimunits=10
+
+show_usage () {
+echo Usage: $0 {args}
+echo \ \ -w {n}, --width={n}            width in mm
+echo \ \ -h {n}, --height={n}           height in mm
+echo \ \ -l {n}, --left={n}             left-margin in mm
+echo \ \ -r {n}, --right={n}            right-margin in mm
+echo \ \ -t {n}, --top={n}              top-margin in mm
+echo \ \ -b {n}, --bottom={n}           bottom-margin in mm
+echo \ \ -o {file}, --file={file}       output filename
+echo \ \ -x {n}\|none, --width={n}\|none  spacing of vertical lines in mm
+echo \ \ -y {n}\|none, --width={n}\|none  spacing of horizontal lines in mm
+echo \ \ --colour={name}                colour of lines
+echo \ \ --dpi={n}                      Density in dots per inch
+echo \ \ --ppcm={n}                     Density in pixels per cm
+echo \ \ --line={n}                     Width of line in pixels
+echo \ \ --linemm={n}                   Width of line in mm
+}
+
+while getopts ":w:h:l:r:t:b:x:y:o:-:" opt; do
+    case $opt in
+        w) width=${OPTARG}
+           ;;
+        h) height=${OPTARG}
+           ;;
+        l) lmarg=${OPTARG}
+           ;;
+        r) rmarg=${OPTARG}
+           ;;
+        t) tmarg=${OPTARG}
+           ;;
+        b) bmarg=${OPTARG}
+           ;;
+        o) outfile=${OPTARG}
+           ;;
+        x) xspace=${OPTARG}
+           ;;
+        x) yspace=${OPTARG}
+           ;;
+        -)
+            name=${OPTARG%=*}
+            value=${OPTARG##*=}
+            case $name in
+               width) width=${value}
+                   ;;
+               height) height=${value}
+                  ;;
+               left) lmarg=${value}
+                  ;;
+               right) rmarg=${value}
+                  ;;
+               top) tmarg=${value}
+                  ;;
+               bottom) bmarg=${value}
+                  ;;
+               output) outfile=${value}
+                  ;;
+               xspacing) xspace=${value}
+                  ;;
+               yspacing) yspace=${value}
+                  ;;
+               colour) colour=${value}
+                  ;;
+               dpi) let 'density=(value * 3937 / 10000)'
+                  ;;
+               ppcm) density=${value}
+                  ;;
+               line)  linewidth=${value}
+                  ;;
+               linemm) linewidthmm=${value}
+                  ;;
+               *) show_usage
+              ;;
+             esac;
+           ;;
+        \?) show_usage
+           ;;
+    esac
+done
+if [ ${xspace} == none ] ; then
+    has_vertical=0
+    xspace=0
+fi
+if [ ${yspace} == none ] ; then
+   has_horizontal=0
+   yspace=0
+fi
+
+#----------------#
+
+let 'xdots=width * density / densityunitsperdimunits'
+let 'ydots=height * density / densityunitsperdimunits'
+
+# Allow specification of line width in mm
+if [ -n "${linewidthmm}" ] ; then
+  let 'linewidth=linewidthmm * density / densityunitsperdimunits'
+fi
+
+size=${xdots}x${ydots}
+
+from_x=$lmarg
+let 'to_x=width - rmarg'
+if [ $xspace = 0 ] ; then
+    let xspace='width-(lmarg + rmarg)'
+else
+    to_x=$(($to_x / $xspace * $xspace))
+fi
+
+from_y=$tmarg
+let 'to_y=height - bmarg'
+if [ $yspace = 0 ] ; then
+    let xspace='height-(tmarg + bmarg)'
+else
+    to_y=$(($to_y / $yspace * $yspace))
+fi
+
+draw_list=""
+if [ ${has_horizontal} == 1 ] ; then
+  let 'from_xp = ((from_x * density) + (densityunitsperdimunits/2)) / densityunitsperdimunits'
+  let 'to_xp = ((to_x * density) + (densityunitsperdimunits/2)) / densityunitsperdimunits'
+  for ((y=$from_y ; y <= to_y; y+=yspace)) ; do
+      let 'yp = ((y * density) + (densityunitsperdimunits/2)) / densityunitsperdimunits'
+      draw_list="${draw_list} line ${from_xp},${yp}  ${to_xp},${yp}"
+  done
+fi
+
+if [ ${has_vertical} == 1 ] ; then
+  let 'from_yp = ((from_y * density) + (densityunitsperdimunits/2)) / densityunitsperdimunits'
+  let 'to_yp = ((to_y * density) + (densityunitsperdimunits/2)) / densityunitsperdimunits'
+  for ((x=$from_x ; x <= to_x; x+=xspace)) ; do
+  let 'xp = ((x * density) + (densityunitsperdimunits/2)) / densityunitsperdimunits'
+    draw_list="${draw_list} line ${xp},${from_yp}  ${xp},${to_yp}"
+  done
+fi
+
+convert -units ${densityunits} -density ${density}x${density} -size ${size} canvas:white -stroke ${colour} -strokewidth ${linewidth} -draw "${draw_list}" ${outfile}
+
