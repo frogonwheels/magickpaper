@@ -15,6 +15,7 @@ bmarg=10
 
 xspace=10
 yspace=10
+ygap=0
 
 has_vertical=1
 has_horizontal=1
@@ -38,8 +39,9 @@ echo \ \ -r {n}, --right={n}            right-margin in mm
 echo \ \ -t {n}, --top={n}              top-margin in mm
 echo \ \ -b {n}, --bottom={n}           bottom-margin in mm
 echo \ \ -o {file}, --file={file}       output filename
-echo \ \ -x {n}\|none, --width={n}\|none  spacing of vertical lines in mm
-echo \ \ -y {n}\|none, --width={n}\|none  spacing of horizontal lines in mm
+echo \ \ -x {n}\|none, --xspace={n}\|none  spacing of vertical lines in mm
+echo \ \ -y {n}\|none, --yspace={n}\|none  spacing of horizontal lines in mm
+echo \ \ -g {n},--ygap={n}              gap in mm between one row and the next
 echo \ \ --colour={name}                colour of lines
 echo \ \ --dpi={n}                      Density in dots per inch
 echo \ \ --ppcm={n}                     Density in pixels per cm
@@ -47,7 +49,7 @@ echo \ \ --line={n}                     Width of line in pixels
 echo \ \ --linemm={n}                   Width of line in mm
 }
 
-while getopts ":w:h:l:r:t:b:x:y:o:-:" opt; do
+while getopts ":w:h:l:r:t:b:x:y:o:g:-:" opt; do
     case $opt in
         w) width=${OPTARG}
            ;;
@@ -67,6 +69,7 @@ while getopts ":w:h:l:r:t:b:x:y:o:-:" opt; do
            ;;
         y) yspace=${OPTARG}
            ;;
+        g) ygap=${OPTARG}
            ;;
         -)
             name=${OPTARG%=*}
@@ -100,6 +103,8 @@ while getopts ":w:h:l:r:t:b:x:y:o:-:" opt; do
                   ;;
                linemm) linewidthmm=${value}
                   ;;
+               ygap) ygap=${value}
+                 ;;
                *) show_usage
               ;;
              esac;
@@ -134,7 +139,7 @@ let 'to_x=width - rmarg'
 if [ $xspace = 0 ] ; then
     let xspace='width-(lmarg + rmarg)'
 else
-    to_x=$(($to_x / $xspace * $xspace))
+  let 'to_x=from_x+(((to_x - from_x) / xspace * xspace))'
 fi
 
 from_y=$tmarg
@@ -142,7 +147,11 @@ let 'to_y=height - bmarg'
 if [ $yspace = 0 ] ; then
     let xspace='height-(tmarg + bmarg)'
 else
-    to_y=$(($to_y / $yspace * $yspace))
+  let 'to_y=from_y+(((to_y - from_y) / yspace * yspace))'
+  if [ $xspace != 0 ] && [ $ygap != 0 ] ; then
+    # stop 1 short
+    let 'to_y=to_y-yspace'
+  fi
 fi
 
 draw_list=""
@@ -150,12 +159,22 @@ if [ ${has_horizontal} == 1 ] ; then
   let 'from_xp = ((from_x * density) + (densityunitsperdimunits/2)) / densityunitsperdimunits'
   let 'to_xp = ((to_x * density) + (densityunitsperdimunits/2)) / densityunitsperdimunits'
   for ((y=$from_y ; y <= to_y; y+=yspace)) ; do
-      let 'yp = ((y * density) + (densityunitsperdimunits/2)) / densityunitsperdimunits'
-      draw_list="${draw_list} line ${from_xp},${yp}  ${to_xp},${yp}"
+    let 'yp = ((y * density) + (densityunitsperdimunits/2)) / densityunitsperdimunits'
+    draw_list="${draw_list} line ${from_xp},${yp}  ${to_xp},${yp}"
+    if [ ${ygap} != 0 ] ; then
+      let 'ypb = (((y+yspace- ygap) * density)  + (densityunitsperdimunits/2)) / densityunitsperdimunits'
+      draw_list="${draw_list} line ${from_xp},${ypb}  ${to_xp},${ypb}"
+      if [ ${has_vertical} == 1 ]; then
+        for ((x=$from_x ; x <= to_x; x+=xspace)) ; do
+          let 'xp = ((x * density) + (densityunitsperdimunits/2)) / densityunitsperdimunits'
+          draw_list="${draw_list} line ${xp},${yp}  ${xp},${ypb}"
+        done
+      fi
+    fi
   done
 fi
 
-if [ ${has_vertical} == 1 ] ; then
+if [ ${has_vertical} == 1 ] && [ ${ygap} == 0 ] ; then
   let 'from_yp = ((from_y * density) + (densityunitsperdimunits/2)) / densityunitsperdimunits'
   let 'to_yp = ((to_y * density) + (densityunitsperdimunits/2)) / densityunitsperdimunits'
   for ((x=$from_x ; x <= to_x; x+=xspace)) ; do
