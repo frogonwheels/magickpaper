@@ -65,7 +65,8 @@ while getopts ":w:h:l:r:t:b:x:y:o:-:" opt; do
            ;;
         x) xspace=${OPTARG}
            ;;
-        x) yspace=${OPTARG}
+        y) yspace=${OPTARG}
+           ;;
            ;;
         -)
             name=${OPTARG%=*}
